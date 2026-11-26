@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fixed: whitespace-only values (`NAME=   `) now trim to `''` and count as unset, so they no longer satisfy `required`, they fall back to `default`, and optional keys are omitted. `trim: false` keeps whitespace as a real value. Error messages show the trimmed value the checks ran on (fixes #439).
+
 - Fixed: malformed schema rules and non-object schema or env inputs now throw `EnvSaafError`. Rule errors name the affected key, including group prefixes (fixes #440).
 
 - Added: `bigint` type for exact integers beyond `Number.MAX_SAFE_INTEGER` (order IDs, snowflake IDs, wei amounts). It accepts plain integer literals with an optional sign (`9007199254740993`, `-3`, `007`, `1_000`) and returns a real `bigint`; decimals, exponents and radix prefixes are rejected. `min`/`max` take a bigint, an integer, or an integer string and are inclusive; `choices` compare as bigints and `array` rules accept `of: 'bigint'`. JSON Schema has no bigint, so `toJsonSchema` renders `{ type: 'string', pattern: '^-?[0-9]+$' }`, and `generateExample` emits a value above the safe-integer range (fixes #417).
