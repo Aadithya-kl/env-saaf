@@ -741,6 +741,11 @@ const BASE64_RE = new RegExp(
 
 const SEMVER_RE = /^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/;
 
+// Issue #439: '' and (when trimming) whitespace-only strings count as unset.
+function isBlank(value, trim) {
+  return value === '' || (trim && typeof value === 'string' && value.trim() === '');
+}
+
 function coerce(key, raw, type, trim = true, protocols, sensitive = false, of = 'string', separator = ',', skipEmpty = false) {
   // trim: false (issue #84) keeps the raw value exactly as provided — for
   // values where the whitespace IS the value (a password with a significant
@@ -749,7 +754,7 @@ function coerce(key, raw, type, trim = true, protocols, sensitive = false, of = 
   // Number() ignores surrounding whitespace, and the boolean spellings are
   // matched on the trimmed value below.
   const v = typeof raw === 'string' ? (trim ? raw.trim() : raw) : raw;
-  const shown = sensitive ? maskValue(raw) : raw;
+  const shown = sensitive ? maskValue(v) : v;
   switch (type) {
     case 'string': return String(v);
     case 'email': {
@@ -1231,6 +1236,11 @@ function validateEnvCore(schema, env, options, valueSources) {
     // (exactly like `undefined`) — it must not reach coercion and become
     // the literal string "null".
     if (raw === null) raw = undefined;
+    // Issue #439: a value that trims to '' is unset, exactly like '' (issue
+    // #186), so `NAME=   ` cannot satisfy `required` or skip `default`.
+    // trim: false keeps whitespace significant, so it stays a real value.
+    const trims = rule.trim !== false;
+    if (isBlank(raw, trims)) raw = '';
     if (raw !== undefined && raw !== '') {
       const notice = deprecationNotice(rule.deprecated);
       if (notice) warn(`env-saaf: ${key} is ${notice}`);
@@ -1249,7 +1259,7 @@ function validateEnvCore(schema, env, options, valueSources) {
       for (const alias of rule.aliases) {
         if (seenAliases.has(alias)) continue;
         seenAliases.add(alias);
-        if (env[alias] !== undefined && env[alias] !== null && env[alias] !== '') {
+        if (env[alias] !== undefined && env[alias] !== null && !isBlank(env[alias], trims)) {
           populatedAliases.push(alias);
         }
       }
@@ -1318,7 +1328,9 @@ function validateEnvCore(schema, env, options, valueSources) {
     presentKeys.add(key);
     presentSources.set(key, valueSource());
     const sensitive = rule.sensitive === true;
-    const shown = sensitive ? maskValue(raw) : raw;
+    // Messages show the value the checks ran on: trimmed unless trim: false.
+    const checked = trims && typeof raw === 'string' ? raw.trim() : raw;
+    const shown = sensitive ? maskValue(checked) : checked;
     const type = rule.type || 'string';
     try {
       const val = coerce(key, raw, type, rule.trim !== false, rule.protocols, sensitive, rule.of, rule.separator, rule.skipEmpty === true);
@@ -2763,10 +2775,8 @@ function boundedStringPlaceholder(type, example, rule, limit) {
     if (min > max) return example;
   }
   const length = Math.min(max, Math.max(min, example.length));
-  if (length === 0) {
-    // An empty assignment is missing, but a quoted space survives parsing and trims to ''.
-    return type === 'string' && rule.trim !== false ? "' '" : example;
-  }
+  // A value that trims to '' is unset (issue #439), so no example has length 0.
+  if (length === 0) return example;
   // Only built-in ASCII examples are resized. Author-supplied values are left alone.
   switch (type) {
     case 'string': return resizeExample(example, length);
