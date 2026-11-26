@@ -39,7 +39,7 @@ const env = validateEnv({
 // Missing/invalid vars throw ONE error listing ALL problems
 ```
 
-O `validateEnv` trata uma string vazia (`''`) da mesma forma que uma variável não definida: uma chave opcional sem `default` é omitida do resultado, uma chave `required` falha como ausente (`missing required variable`), e uma chave com `default` usa esse valor padrão. Isso corresponde ao `${VAR:-fallback}` em [Carregando um arquivo `.env` de verdade](#carregando-um-arquivo-env-de-verdade), que também trata uma expansão vazia como não definida. Somente `''` conta como não definida — uma entrada só com espaços, como `'   '`, é tratada como fornecida (reduzida a `''` para `string` por padrão, ou mantida como está com `trim: false`).
+O `validateEnv` trata uma string vazia (`''`) da mesma forma que uma variável não definida: uma chave opcional sem `default` é omitida do resultado, uma chave `required` falha como ausente (`missing required variable`), e uma chave com `default` usa esse valor padrão. Isso corresponde ao `${VAR:-fallback}` em [Carregando um arquivo `.env` de verdade](#carregando-um-arquivo-env-de-verdade), que também trata uma expansão vazia como não definida. Uma entrada só com espaços, como `'   '`, é reduzida a `''`, então também conta como não definida; com `trim: false` os espaços são mantidos e contam como um valor fornecido.
 
 ### Referência de tipos
 
