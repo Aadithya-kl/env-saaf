@@ -714,9 +714,11 @@ assert.throws(() => validateEnv({ A: { required: true } }, {}), EnvSaafError);
   const schema = { PORT: { type: 'port', required: true } };
   assert.strictEqual(validateEnv(schema, { PORT: '0' }).PORT, 0);
   assert.strictEqual(validateEnv(schema, { PORT: '65535' }).PORT, 65535);
-  for (const raw of ['-1', '65536', '3.5', 'abc', ' \t ', false]) {
+  for (const raw of ['-1', '65536', '3.5', 'abc', false]) {
     assert.throws(() => validateEnv(schema, { PORT: raw }), /expected a port \(0-65535, e\.g\. 3000\)/);
   }
+  // Issue #439: whitespace-only trims to '' and counts as unset.
+  assert.throws(() => validateEnv(schema, { PORT: ' \t ' }), /PORT: missing required variable/);
   // Issue #276: `null` counts as "not set", not as the string "null".
   assert.throws(() => validateEnv(schema, { PORT: null }), /missing required variable/);
   const untrimmed = { PORT: { ...schema.PORT, trim: false } };
@@ -3405,12 +3407,12 @@ assert.deepStrictEqual(
     assert.throws(
       () => validateEnv({ N: { type: 'number' } }, { N: raw }),
       err => err instanceof EnvSaafError && err.errors.length === 1
-        && err.errors[0] === `N: expected a number (e.g. 3.14), got "${raw}"`,
+        && err.errors[0] === `N: expected a number (e.g. 3.14), got "${raw.trim()}"`,
     );
     assert.throws(
       () => validateEnv({ N: { type: 'int' } }, { N: raw }),
       err => err instanceof EnvSaafError && err.errors.length === 1
-        && err.errors[0] === `N: expected an integer (e.g. 42), got "${raw}"`,
+        && err.errors[0] === `N: expected an integer (e.g. 42), got "${raw.trim()}"`,
     );
   }
   // Non-finite values cannot slip past a lower bound like min: 0 either.
@@ -4716,9 +4718,39 @@ assert.deepStrictEqual(
   );
   assert.deepStrictEqual(defaulted, { HOST: 'localhost', PORT: 3000 });
 
-  // Whitespace-only is provided, not unset: trimmed to '' by default, preserved with trim: false.
-  assert.deepStrictEqual(validateEnv({ NICK: { type: 'string' } }, { NICK: '   ' }), { NICK: '' });
+  // Issue #439: whitespace-only trims to '' and is unset like ''; trim: false keeps it as a value.
+  assert.deepStrictEqual(validateEnv({ NICK: { type: 'string' } }, { NICK: '   ' }), {});
   assert.deepStrictEqual(validateEnv({ NICK: { type: 'string', trim: false } }, { NICK: '   ' }), { NICK: '   ' });
+  assert.throws(
+    () => validateEnv({ NAME: { type: 'string', required: true } }, { NAME: ' \t ' }),
+    err => err instanceof EnvSaafError && err.errors.length === 1 && err.errors[0] === 'NAME: missing required variable',
+  );
+  assert.deepStrictEqual(
+    validateEnv({ NAME: { type: 'string', required: true, trim: false } }, { NAME: '   ' }),
+    { NAME: '   ' },
+  );
+  assert.deepStrictEqual(
+    validateEnv({ NAME: { type: 'string', default: 'fallback' }, PORT: { type: 'port', default: 3000 } }, { NAME: '   ', PORT: ' ' }),
+    { NAME: 'fallback', PORT: 3000 },
+  );
+  // A whitespace-only alias is unset too, so the next populated alias wins.
+  assert.deepStrictEqual(
+    validateEnv({ NAME: { type: 'string', aliases: ['OLD', 'OLDER'] } }, { NAME: ' ', OLD: '  ', OLDER: 'x' }, { onWarn: () => {} }),
+    { NAME: 'x' },
+  );
+  // Messages show the trimmed value the check ran on.
+  assert.throws(
+    () => validateEnv({ NAME: { type: 'string', minLength: 3 } }, { NAME: '  ab  ' }),
+    err => err instanceof EnvSaafError && err.errors[0] === 'NAME: expected a string at least 3 characters long, got "ab"',
+  );
+  assert.throws(
+    () => validateEnv({ N: { type: 'int' } }, { N: '  abc  ' }),
+    err => err instanceof EnvSaafError && err.errors[0] === 'N: expected an integer (e.g. 42), got "abc"',
+  );
+  assert.throws(
+    () => validateEnv({ NAME: { type: 'string', trim: false, minLength: 7 } }, { NAME: '  ab  ' }),
+    err => err instanceof EnvSaafError && err.errors[0] === 'NAME: expected a string at least 7 characters long, got "  ab  "',
+  );
 
   // parseEnvFile preserves KEY= as '', which validateEnv then treats as unset.
   const parsed = parseEnvFile('NICK=\n');
@@ -6153,7 +6185,6 @@ assert.deepStrictEqual(
     ['string', { minLength: 20 }, 20],
     ['string', { maxLength: 3 }, 3],
     ['string', { minLength: 5, maxLength: 5 }, 5],
-    ['string', { maxLength: 0 }, 0],
     [undefined, { minLength: 18, maxLength: 20 }, 18],
   ];
   for (const [type, bounds, length] of cases) {
@@ -6219,6 +6250,8 @@ assert.deepStrictEqual(
 // Issue #275: unachievable bounds do not mangle the type or throw on generation.
 {
   const impossible = [
+    // Issue #439: a value that trims to '' is unset, so maxLength: 0 has no valid value either way.
+    ['string', { maxLength: 0 }],
     ['string', { maxLength: 0, trim: false }],
     ['string', { minLength: Number.MAX_SAFE_INTEGER }],
     ['email', { maxLength: 4 }],
@@ -8342,9 +8375,14 @@ const conflictsWithTest = (async () => {
     );
   }
 
-  // Whitespace-only input on a string rule counts as provided (unlike ''), so it conflicts.
+  // Issue #439: whitespace-only input trims to '' and is unset, so it does not conflict;
+  // with trim: false the whitespace is the value, so it does.
+  assert.deepStrictEqual(
+    validateEnv({ A: { type: 'string', conflictsWith: 'B' }, B: { type: 'string' } }, { A: '   ', B: 'ok' }),
+    { B: 'ok' },
+  );
   assert.throws(
-    () => validateEnv({ A: { type: 'string', conflictsWith: 'B' }, B: { type: 'string' } }, { A: '   ', B: 'ok' }),
+    () => validateEnv({ A: { type: 'string', trim: false, conflictsWith: 'B' }, B: { type: 'string' } }, { A: '   ', B: 'ok' }),
     err => err instanceof EnvSaafError && err.errors[0] === 'A: conflicts with B (cannot set both)',
   );
 
