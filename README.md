@@ -39,7 +39,7 @@ const env = validateEnv({
 // Missing/invalid vars throw ONE error listing ALL problems
 ```
 
-`validateEnv` treats an empty string (`''`) the same as an unset variable: an optional key with no `default` is omitted from the result, a `required` key fails as missing (`missing required variable`), and a key with a `default` uses that default instead. This matches `${VAR:-fallback}` in [Loading a real `.env` file](#loading-a-real-env-file), which also treats an empty expansion as unset. Only `''` counts as unset — whitespace-only input such as `'   '` is treated as provided (trimmed to `''` for `string` by default, or kept as-is with `trim: false`).
+`validateEnv` treats an empty string (`''`) the same as an unset variable: an optional key with no `default` is omitted from the result, a `required` key fails as missing (`missing required variable`), and a key with a `default` uses that default instead. This matches `${VAR:-fallback}` in [Loading a real `.env` file](#loading-a-real-env-file), which also treats an empty expansion as unset. Whitespace-only input such as `'   '` trims to `''`, so it counts as unset too; with `trim: false` the whitespace is kept and counts as a provided value.
 
 ### How validation works
 
