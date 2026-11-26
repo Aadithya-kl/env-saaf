@@ -39,7 +39,7 @@ const env = validateEnv({
 // Missing/invalid vars throw ONE error listing ALL problems
 ```
 
-`validateEnv` खाली string (`''`) को unset variable जैसा ही मानता है: बिना `default` वाली optional key result से हटा दी जाती है, `required` key missing के रूप में fail होती है (`missing required variable`), और `default` वाली key उसकी जगह उस default का इस्तेमाल करती है। यह [असल `.env` file load करना](#loading-a-real-env-file) वाले `${VAR:-fallback}` से मेल खाता है, जो खाली expansion को भी unset मानता है। सिर्फ़ `''` ही unset गिना जाता है — सिर्फ़ whitespace वाला input जैसे `'   '` दिया हुआ माना जाता है (default रूप से `string` के लिए trim होकर `''` हो जाता है, या `trim: false` के साथ जैसा है वैसा रहता है)।
+`validateEnv` खाली string (`''`) को unset variable जैसा ही मानता है: बिना `default` वाली optional key result से हटा दी जाती है, `required` key missing के रूप में fail होती है (`missing required variable`), और `default` वाली key उसकी जगह उस default का इस्तेमाल करती है। यह [असल `.env` file load करना](#loading-a-real-env-file) वाले `${VAR:-fallback}` से मेल खाता है, जो खाली expansion को भी unset मानता है। सिर्फ़ whitespace वाला input जैसे `'   '` trim होकर `''` बन जाता है, इसलिए वह भी unset गिना जाता है; `trim: false` के साथ whitespace बना रहता है और दिया हुआ value माना जाता है।
 
 ### प्रकार संदर्भ
 
