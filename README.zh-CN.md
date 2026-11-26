@@ -39,7 +39,7 @@ const env = validateEnv({
 // Missing/invalid vars throw ONE error listing ALL problems
 ```
 
-`validateEnv` 将空字符串（`''`）与未设置的变量同等对待：没有 `default` 的可选键会从结果中省略，`required` 键会以缺失为由报错（`missing required variable`），而带有 `default` 的键则改用该默认值。这与[加载真正的 `.env` 文件](#loading-a-real-env-file)一节中的 `${VAR:-fallback}` 行为一致，后者同样把展开为空的值视为未设置。只有 `''` 算作未设置——仅含空白字符的输入（如 `'   '`）会被视为已提供（对于 `string` 类型，默认会修剪成 `''`；使用 `trim: false` 时则保持原样）。
+`validateEnv` 将空字符串（`''`）与未设置的变量同等对待：没有 `default` 的可选键会从结果中省略，`required` 键会以缺失为由报错（`missing required variable`），而带有 `default` 的键则改用该默认值。这与[加载真正的 `.env` 文件](#loading-a-real-env-file)一节中的 `${VAR:-fallback}` 行为一致，后者同样把展开为空的值视为未设置。仅含空白字符的输入（如 `'   '`）会被修剪成 `''`，因此同样算作未设置；使用 `trim: false` 时空白会被保留，并视为已提供的值。
 
 ### 类型参考
 
